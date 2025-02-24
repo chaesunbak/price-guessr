@@ -43,10 +43,23 @@ class BrowserManager {
           "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--disable-software-rasterizer",
+          "--disable-dev-tools",
+          "--no-first-run",
+          "--headless=new",
+          "--hide-scrollbars",
+          "--mute-audio",
+          "--disable-infobars",
+          "--window-size=1920,1080",
         ],
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+        },
         executablePath: await chromium.executablePath,
-        headless: chromium.headless,
+        headless: true,
         ignoreHTTPSErrors: true,
       });
 
@@ -54,39 +67,48 @@ class BrowserManager {
         console.log("브라우저 연결 해제됨");
         this.browser = null;
       });
+
+      // 브라우저가 준비되었는지 확인
+      const pages = await this.browser.pages();
+      if (pages.length === 0) {
+        await this.browser.newPage();
+      }
+
+      console.log("브라우저 초기화 완료");
     }
     return this.browser;
   }
 
   private async processQueue() {
     if (this.isProcessing || this.requestQueue.length === 0) {
-      console.log("큐 처리 스킵:", {
-        isProcessing: this.isProcessing,
-        queueLength: this.requestQueue.length,
-      });
       return;
     }
 
-    logMemoryUsage("Queue Processing Start");
     this.isProcessing = true;
-    const browser = await this.initBrowser();
+    let browser = null;
 
     try {
+      browser = await this.initBrowser();
+      if (!browser) {
+        throw new Error("브라우저 초기화 실패");
+      }
+
       while (this.requestQueue.length > 0) {
         const request = this.requestQueue.shift()!;
-        console.log("요청 처리:", {
-          categoryId: request.categoryId,
-          remainingQueue: this.requestQueue.length,
-        });
-
-        const page = await browser.newPage();
+        let page = null;
 
         try {
+          page = await browser.newPage();
+          await page.setDefaultNavigationTimeout(10000);
+          await page.setDefaultTimeout(10000);
+
+          // 리소스 최적화
           await page.setRequestInterception(true);
           page.on("request", (req) => {
             if (
               req.resourceType() === "stylesheet" ||
               req.resourceType() === "font" ||
+              req.resourceType() === "image" ||
               req.resourceType() === "script"
             ) {
               req.abort();
@@ -95,21 +117,23 @@ class BrowserManager {
             }
           });
 
-          await page.setViewport({ width: 1920, height: 1080 });
           await page.setUserAgent(generateRandomUA());
 
-          console.log("페이지 로딩 시작:", request.categoryId);
-          await page.goto(
+          const response = await page.goto(
             `https://www.coupang.com/np/categories/${request.categoryId}`,
-            { waitUntil: "domcontentloaded", timeout: 5000 }
+            {
+              waitUntil: "domcontentloaded",
+              timeout: 10000,
+            }
           );
 
-          const result = await page.evaluate(async () => {
-            await page.waitForSelector("li.baby-product", { timeout: 5000 });
+          if (!response || !response.ok()) {
+            throw new Error(`페이지 로드 실패: ${response?.status()}`);
+          }
+
+          const result = await page.evaluate(() => {
             const item = document.querySelector("li.baby-product");
-
             if (!item) return null;
-
             return {
               name: item.querySelector(".name")?.textContent?.trim() || "",
               price:
@@ -119,10 +143,6 @@ class BrowserManager {
             };
           });
 
-          console.log("크롤링 결과:", {
-            categoryId: request.categoryId,
-            success: !!result,
-          });
           request.resolve(result);
         } catch (error) {
           console.error("페이지 처리 중 에러:", error);
@@ -130,17 +150,26 @@ class BrowserManager {
             error instanceof Error ? error : new Error(String(error))
           );
         } finally {
-          await page.close();
-          console.log("페이지 닫힘");
-          logMemoryUsage("After Page Close");
+          if (page) {
+            try {
+              await page.close();
+            } catch (e) {
+              console.error("페이지 닫기 실패:", e);
+            }
+          }
         }
       }
     } catch (error) {
       console.error("큐 처리 중 치명적 에러:", error);
     } finally {
       this.isProcessing = false;
-      console.log("큐 처리 완료");
-      logMemoryUsage("Queue Processing End");
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (e) {
+          console.error("브라우저 닫기 실패:", e);
+        }
+      }
     }
   }
 
