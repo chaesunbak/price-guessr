@@ -105,7 +105,8 @@ class BrowserManager {
             { waitUntil: "domcontentloaded", timeout: 5000 }
           );
 
-          const result = await page.evaluate(() => {
+          const result = await page.evaluate(async () => {
+            await page.waitForSelector("li.baby-product", { timeout: 5000 });
             const item = document.querySelector("li.baby-product");
 
             if (!item) return null;
