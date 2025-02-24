@@ -14,7 +14,6 @@ export const metadata: Metadata = {
     url: "https://xpang.vercel.app",
   },
   twitter: {
-    card: "summary_large_image",
     title: "Xpang에 가면 | 전국민 물가 체감 프로젝트",
     description: "쿠팡 상품의 가격을 맞추면서 물가를 체감해보세요",
   },

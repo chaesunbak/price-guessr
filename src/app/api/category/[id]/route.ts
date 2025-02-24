@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import type { Browser } from "puppeteer";
-import puppeteer from "puppeteer";
+import type { Browser } from "puppeteer-core";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 import type { Product } from "@/types/game";
 
 // 메모리 사용량 로깅 함수
@@ -37,12 +38,10 @@ class BrowserManager {
     if (!this.browser) {
       console.log("브라우저 초기화...");
       this.browser = await puppeteer.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-        ],
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless === "true",
       });
 
       // 브라우저 연결 해제 감지
