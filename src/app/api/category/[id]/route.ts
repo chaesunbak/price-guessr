@@ -38,13 +38,19 @@ class BrowserManager {
     if (!this.browser) {
       console.log("브라우저 초기화...");
       this.browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--single-process",
+        ],
         defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless === "true",
+        executablePath: await chromium.executablePath,
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
       });
 
-      // 브라우저 연결 해제 감지
       this.browser.on("disconnected", () => {
         console.log("브라우저 연결 해제됨");
         this.browser = null;
@@ -101,6 +107,7 @@ class BrowserManager {
 
           const result = await page.evaluate(() => {
             const item = document.querySelector("li.baby-product");
+
             if (!item) return null;
 
             return {
@@ -223,7 +230,7 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
-        error: "데이터를 가져오는 중 오류가 발생했습니다.",
+        error: `Error: ${(error as Error).message}`,
       },
       {
         status: 500,

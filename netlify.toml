@@ -10,4 +10,5 @@
   package = "@netlify/plugin-nextjs"
 
 [build.environment]
-  NODE_VERSION = "18" 
+  NODE_VERSION = "18"
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true" 
