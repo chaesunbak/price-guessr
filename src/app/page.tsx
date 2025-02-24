@@ -1,101 +1,200 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import type { Difficulty, GameState, GameLog, Product } from "@/types/game";
+import { DIFFICULTY_SETTINGS } from "@/types/game";
+import { GameStart } from "@/components/game/game-start";
+import { GamePlay } from "@/components/game/game-play";
+import { GameEnd } from "@/components/game/game-end";
+
+const STORAGE_KEY = "difficulty_progress";
+
+export interface AnswerState {
+  isChecking: boolean;
+  isCorrect: boolean | null;
+  actualPrice: number | null;
+  userGuess: number | null;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [gameState, setGameState] = useState<GameState>({
+    status: "before",
+    round: 1,
+    lives: 3,
+    score: 0,
+    difficulty: "easy",
+    logs: [],
+  });
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+  const [answerState, setAnswerState] = useState<AnswerState>({
+    isChecking: false,
+    isCorrect: null,
+    actualPrice: null,
+    userGuess: null,
+  });
+
+  const handleSelectDifficulty = (selectedDifficulty: Difficulty) => {
+    setGameState((prev) => ({
+      ...prev,
+      difficulty: selectedDifficulty,
+    }));
+  };
+
+  const handleGameStart = () => {
+    setGameState((prev) => ({
+      ...prev,
+      status: "playing",
+      round: 1,
+      lives: DIFFICULTY_SETTINGS[prev.difficulty].lives,
+      score: 0,
+    }));
+  };
+
+  const handleGameEnd = () => {
+    setGameState((prev) => ({
+      ...prev,
+      status: "end",
+    }));
+  };
+
+  const handleBackToBefore = () => {
+    setGameState((prev) => ({
+      ...prev,
+      status: "before",
+      difficulty: "easy",
+    }));
+  };
+
+  const handleCheckAnswer = (
+    price: number,
+    userGuess: number,
+    product: Product
+  ) => {
+    const deviation = DIFFICULTY_SETTINGS[gameState.difficulty].deviation / 100;
+    const allowedDifference = price * deviation;
+    const difference = Math.abs(price - userGuess);
+    const isCorrect = difference <= allowedDifference;
+
+    // 허용 오차 범위를 벗어난 만큼만 생명력 감소 계산
+    let livesLost = 0;
+    if (!isCorrect) {
+      const excessDifference = difference - allowedDifference;
+      const excessRate = excessDifference / price;
+      livesLost = Math.round(excessRate * 100);
+    }
+
+    // 정답 근접도에 따른 점수 계산
+    let earnedScore = 0;
+    if (isCorrect) {
+      const accuracyRate = 1 - difference / allowedDifference; // 0 ~ 1 사이 값
+      // 기본 100점에 정확도에 따라 최대 100점 추가 보너스
+      earnedScore = Math.round(100 + accuracyRate * 100);
+
+      // 난이도 보너스
+      switch (gameState.difficulty) {
+        case "hard":
+          earnedScore *= 10; // 하드 모드는 3배
+          break;
+        case "normal":
+          earnedScore *= 5; // 노말 모드는 2배
+          break;
+        // easy는 기본 점수
+      }
+    }
+
+    setAnswerState({
+      isChecking: true,
+      isCorrect,
+      actualPrice: price,
+      userGuess,
+    });
+
+    if (isCorrect) {
+      setGameState((prev) => ({
+        ...prev,
+        score: prev.score + earnedScore,
+      }));
+    } else {
+      setGameState((prev) => ({
+        ...prev,
+        lives: Math.max(0, prev.lives - livesLost),
+      }));
+    }
+
+    // 로그 기록
+    const log: GameLog = {
+      round: gameState.round,
+      product: product,
+      actualPrice: price,
+      userGuess: userGuess,
+      isCorrect: isCorrect,
+      score: earnedScore,
+      livesLost: livesLost,
+    };
+
+    setGameState((prev) => ({
+      ...prev,
+      logs: [...prev.logs, log],
+    }));
+
+    setTimeout(() => {
+      setAnswerState({
+        isChecking: false,
+        isCorrect: null,
+        actualPrice: null,
+        userGuess: null,
+      });
+
+      if (gameState.lives <= livesLost) {
+        // 남은 생명력보다 감소량이 더 크면 게임 오버
+        handleGameEnd();
+        return;
+      }
+
+      if (gameState.round === 10) {
+        handleGameEnd();
+        const progress = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        progress[gameState.difficulty] = true;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+        return;
+      }
+
+      setGameState((prev) => ({
+        ...prev,
+        round: prev.round + 1,
+      }));
+    }, 3000);
+  };
+
+  const renderGameContent = () => {
+    switch (gameState.status) {
+      case "before":
+        return (
+          <GameStart
+            onSelectDifficulty={handleSelectDifficulty}
+            onGameStart={handleGameStart}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+        );
+      case "playing":
+        return (
+          <GamePlay
+            stats={gameState}
+            onCheckAnswer={handleCheckAnswer}
+            answerState={answerState}
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        );
+      case "end":
+        return (
+          <GameEnd stats={gameState} onBackToBefore={handleBackToBefore} />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <main className="flex flex-col items-center justify-center min-h-screen max-w-md mx-auto">
+      {renderGameContent()}
+    </main>
   );
 }
