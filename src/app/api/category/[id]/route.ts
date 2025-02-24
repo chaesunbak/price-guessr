@@ -3,93 +3,98 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import type { Product } from "@/types/game";
 
-// 메모리 사용량 로깅 함수
-function logMemoryUsage(label: string) {
-  const used = process.memoryUsage();
-  console.log(`[${label}] Memory Usage:`);
-  console.log(`  RSS: ${Math.round(used.rss / 1024 / 1024)}MB`); // Resident Set Size
-  console.log(`  Heap Total: ${Math.round(used.heapTotal / 1024 / 1024)}MB`);
-  console.log(`  Heap Used: ${Math.round(used.heapUsed / 1024 / 1024)}MB`);
-  console.log(`  External: ${Math.round(used.external / 1024 / 1024)}MB`);
-}
+chromium.setHeadlessMode = true;
+chromium.setGraphicsMode = false;
 
 async function fetchProduct(categoryId: string): Promise<Product | null> {
-  const browser = await puppeteer.launch({
-    args: [
-      ...chromium.args,
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-software-rasterizer",
-      "--disable-dev-tools",
-      "--headless=new",
-    ],
-    defaultViewport: {
-      width: 1920,
-      height: 1080,
-      deviceScaleFactor: 1,
-    },
-    executablePath: await chromium.executablePath,
-    headless: true,
-    ignoreHTTPSErrors: true,
-  });
+  console.log("카테고리 ID:", categoryId);
 
-  let page = null;
+  let browser = null;
   try {
-    page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(10000);
-    await page.setDefaultTimeout(10000);
-
-    // 리소스 최적화
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      if (
-        req.resourceType() === "stylesheet" ||
-        req.resourceType() === "font" ||
-        req.resourceType() === "image" ||
-        req.resourceType() === "script"
-      ) {
-        req.abort();
-      } else {
-        req.continue();
-      }
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath:
+        process.env.CHROME_EXECUTABLE_PATH ||
+        (await chromium.executablePath(
+          "/var/task/node_modules/@sparticuz/chromium/bin"
+        )),
     });
 
-    await page.setUserAgent(generateRandomUA());
-
-    const response = await page.goto(
-      `https://www.coupang.com/np/categories/${categoryId}`,
-      {
-        waitUntil: "domcontentloaded",
-        timeout: 10000,
-      }
-    );
-
-    if (!response || !response.ok()) {
-      throw new Error(`페이지 로드 실패: ${response?.status()}`);
+    if (!browser) {
+      throw new Error("브라우저 초기화 실패");
     }
 
-    const result = await page.evaluate(() => {
-      const item = document.querySelector("li.baby-product");
-      if (!item) return null;
-      return {
-        name: item.querySelector(".name")?.textContent?.trim() || "",
-        price: item.querySelector(".price-value")?.textContent?.trim() || "",
-        img: item.querySelector("img")?.src || "",
-        url: item.querySelector("a")?.href || "",
-      };
-    });
+    console.log("브라우저 초기화 성공");
 
-    return result;
+    let page = null;
+    try {
+      page = await browser.newPage();
+
+      await page.setDefaultNavigationTimeout(10000);
+      await page.setDefaultTimeout(10000);
+
+      // 리소스 최적화
+      await page.setRequestInterception(true);
+      page.on("request", (req) => {
+        if (
+          req.resourceType() === "stylesheet" ||
+          req.resourceType() === "font" ||
+          // req.resourceType() === "image" ||
+          req.resourceType() === "script"
+        ) {
+          req.abort();
+        } else {
+          req.continue();
+        }
+      });
+
+      await page.setUserAgent(generateRandomUA());
+
+      const response = await page.goto(
+        `https://www.coupang.com/np/categories/${categoryId}`,
+        {
+          waitUntil: "domcontentloaded",
+          timeout: 10000,
+        }
+      );
+
+      if (!response || !response.ok()) {
+        throw new Error(`페이지 로드 실패: ${response?.status()}`);
+      }
+
+      const result = await page.evaluate(() => {
+        const item = document.querySelector("li.baby-product");
+        if (!item) return null;
+        return {
+          name: item.querySelector(".name")?.textContent?.trim() || "",
+          price: item.querySelector(".price-value")?.textContent?.trim() || "",
+          img: item.querySelector("img")?.src || "",
+          url: item.querySelector("a")?.href || "",
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error("페이지 처리 중 에러:", error);
+      throw error;
+    } finally {
+      if (page) {
+        await page.close();
+      }
+    }
   } catch (error) {
-    console.error("상품 가져오기 실패:", error);
+    console.error("브라우저 초기화 실패:", error);
     throw error;
   } finally {
-    if (page) {
-      await page.close().catch(console.error);
+    if (browser) {
+      try {
+        await browser.close();
+        console.log("브라우저 닫힘");
+      } catch (e) {
+        console.error("브라우저 닫기 실패:", e);
+      }
     }
-    await browser.close().catch(console.error);
   }
 }
 
@@ -115,7 +120,6 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  logMemoryUsage("Route Handler Start");
   try {
     const categoryId = (await params).id;
     const product = await fetchProduct(categoryId);
@@ -148,7 +152,6 @@ export async function GET(
     );
   } catch (error) {
     console.error("크롤링 실패:", error);
-    logMemoryUsage("Route Handler Error");
     return NextResponse.json(
       {
         success: false,
@@ -162,7 +165,6 @@ export async function GET(
       }
     );
   } finally {
-    logMemoryUsage("Route Handler End");
   }
 }
 

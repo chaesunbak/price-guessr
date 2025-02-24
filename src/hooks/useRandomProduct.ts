@@ -61,10 +61,11 @@ export function useRandomProduct({
       usedCategoriesRef.current.push(category.id);
       console.log(`라운드 ${round}: ${category.name} 카테고리 선택됨`);
 
-      const response = await fetch(`/api/category/${category.id}`, {
-        cache: "force-cache",
-        next: { revalidate: 300 }, // 5분마다 재검증
-      });
+      const response = await fetch(`/api/category/${category.id}`);
+      // const response = await fetch(`/api/category/${category.id}`, {
+      //   cache: "force-cache",
+      //   next: { revalidate: 300 }, // 5분마다 재검증
+      // });
       const data = await response.json();
 
       if (!response.ok) {
