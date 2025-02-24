@@ -3,16 +3,21 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import type { Product } from "@/types/game";
 
-chromium.setHeadlessMode = true;
-chromium.setGraphicsMode = false;
-
 async function fetchProduct(categoryId: string): Promise<Product | null> {
   console.log("카테고리 ID:", categoryId);
 
   let browser = null;
   try {
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        "--single-process", // 단일 프로세스로 실행
+        "--no-zygote", // zygote 프로세스 비활성화
+        "--disable-gpu", // GPU 가속 비활성화
+        "--no-sandbox", // 샌드박스 비활성화
+        "--disable-dev-shm-usage", // 공유 메모리 사용 비활성화
+        "--disable-features=DevTools", //개발자모드 비활성화
+      ],
       defaultViewport: chromium.defaultViewport,
       executablePath:
         process.env.CHROME_EXECUTABLE_PATH ||
