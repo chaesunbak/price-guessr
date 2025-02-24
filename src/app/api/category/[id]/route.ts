@@ -43,7 +43,6 @@ class BrowserManager {
           "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
-          "--single-process",
         ],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath,
