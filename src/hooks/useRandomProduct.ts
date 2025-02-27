@@ -46,6 +46,8 @@ export function useRandomProduct({
     try {
       isFetchingRef.current = true;
       let category;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 3;
 
       // 이미 사용한 카테고리가 10개면 초기화
       if (usedCategoriesRef.current.length >= 10) {
@@ -61,25 +63,40 @@ export function useRandomProduct({
       usedCategoriesRef.current.push(category.id);
       console.log(`라운드 ${round}: ${category.name} 카테고리 선택됨`);
 
-      const response = await fetch(`/api/category/${category.id}`);
-      // const response = await fetch(`/api/category/${category.id}`, {
-      //   cache: "force-cache",
-      //   next: { revalidate: 300 }, // 5분마다 재검증
-      // });
-      const data = await response.json();
+      // 최대 3번 시도
+      while (attempts < MAX_ATTEMPTS) {
+        try {
+          const response = await fetch(`/api/category/${category.id}`);
+          const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "상품을 가져오는데 실패했습니다.");
+          if (response.ok && data.success && data.data) {
+            return {
+              ...data.data,
+              category: category.name,
+            };
+          }
+
+          // 실패 시 다른 카테고리 시도
+          attempts++;
+          if (attempts < MAX_ATTEMPTS) {
+            console.log(
+              `카테고리 ${category.id} 실패, 다른 카테고리 시도 중...`
+            );
+            do {
+              category = getRandomCategory();
+            } while (usedCategoriesRef.current.includes(category.id));
+
+            usedCategoriesRef.current.push(category.id);
+            console.log(`재시도 ${attempts}: ${category.name} 카테고리 선택됨`);
+          }
+        } catch (err) {
+          attempts++;
+          console.error(`시도 ${attempts} 실패:`, err);
+          if (attempts >= MAX_ATTEMPTS) break;
+        }
       }
 
-      if (data.success && data.data) {
-        return {
-          ...data.data,
-          category: category.name,
-        };
-      } else {
-        throw new Error("상품 데이터가 올바르지 않습니다.");
-      }
+      throw new Error("상품을 가져오는데 실패했습니다.");
     } finally {
       isFetchingRef.current = false;
     }

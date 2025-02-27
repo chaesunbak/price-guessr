@@ -36,7 +36,6 @@ export function SubmitScoreDialog({ stats }: Props) {
       const { error: submitError } = await supabase.from("log").insert({
         nickname: nickname.trim(),
         score: stats.score,
-        difficulty: stats.difficulty as string,
       });
 
       if (submitError) {
@@ -44,11 +43,12 @@ export function SubmitScoreDialog({ stats }: Props) {
         throw new Error(submitError.message || "기록 등록에 실패했습니다.");
       } else {
         setIsSuccess(true);
+        setIsOpen(false);
       }
     } catch (err) {
       console.error("에러 발생:", err);
       setError(
-        err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다."
+        err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.",
       );
     } finally {
       setIsSubmitting(false);
@@ -68,8 +68,7 @@ export function SubmitScoreDialog({ stats }: Props) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-2">
-            <div className="flex flex-col gap-1 bg-secondary text-secondary-foreground p-3 rounded-lg text-sm">
-              <p>난이도: {stats.difficulty}</p>
+            <div className="flex flex-col gap-1 rounded-lg bg-secondary p-3 text-sm text-secondary-foreground">
               <p>최종 점수: {stats.score.toLocaleString()}점</p>
             </div>
             <Input
@@ -88,7 +87,7 @@ export function SubmitScoreDialog({ stats }: Props) {
               className="w-full"
             >
               {isSubmitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : isSuccess ? (
                 "등록 완료!"
               ) : (

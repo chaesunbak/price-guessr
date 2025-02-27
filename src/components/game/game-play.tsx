@@ -1,28 +1,24 @@
 import Image from "next/image";
-import { useMemo } from "react";
 import type { GameState, Product } from "@/types/game";
 import { useRandomProduct } from "@/hooks/useRandomProduct";
 import { Button } from "@/components/ui/button";
 import { PriceOptions } from "@/components/game/price-options";
-import type { AnswerState } from "@/app/page";
 import { Loader } from "@/components/loader";
-import { BottomProgress } from "@/components/game/bottom-progress";
+import { getScore } from "@/lib/game";
+import { ArrowBigRight } from "lucide-react";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
+import { useEffect } from "react";
 
 interface Props {
   stats: GameState;
-  onCheckAnswer: (price: number, userGuess: number, product: Product) => void;
-  answerState: AnswerState;
+  onCheckAnswer: (userGuess: number, product: Product) => void;
+  onNextRound: () => void;
 }
 
-export function GamePlay({ stats, onCheckAnswer, answerState }: Props) {
+export function GamePlay({ stats, onCheckAnswer, onNextRound }: Props) {
   const { product, isLoading, error } = useRandomProduct({
     round: stats.round,
   });
-
-  const actualPrice = useMemo(() => {
-    if (!product?.price) return null;
-    return parseInt(product.price.replace(/[^0-9]/g, ""));
-  }, [product?.price]);
 
   const getAbsoluteImageUrl = (relativeUrl: string) => {
     if (relativeUrl.startsWith("//")) {
@@ -31,14 +27,34 @@ export function GamePlay({ stats, onCheckAnswer, answerState }: Props) {
     return relativeUrl;
   };
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString() + "원";
+  const handleSubmit = (inputPrice: number) => {
+    if (stats.isChecking || !product) return;
+    onCheckAnswer(inputPrice, product);
   };
 
-  const handleSubmit = (price: number) => {
-    if (answerState.isChecking || !actualPrice || !product) return;
-    onCheckAnswer(actualPrice, price, product);
+  const handleNextRound = () => {
+    onNextRound();
   };
+
+  // 키보드 이벤트 리스너 추가
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 엔터 키를 누르고, 정답 확인 중일 때만 다음 라운드로 진행
+      if (
+        (e.key === "Enter" || e.code === "Enter" || e.keyCode === 13) &&
+        stats.isChecking
+      ) {
+        handleNextRound();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [stats.isChecking, onNextRound]);
 
   if (error) {
     return (
@@ -49,66 +65,90 @@ export function GamePlay({ stats, onCheckAnswer, answerState }: Props) {
     );
   }
 
-  if (isLoading || !product || !actualPrice) {
+  if (isLoading || !product) {
     return <Loader />;
   }
 
+  const { earnedScore, difference, accuracy } = getScore(
+    stats.userGuess,
+    product,
+  );
+
   return (
-    <div className="flex flex-col items-center gap-6 h-full p-2 w-full">
-      <div className="flex w-full flex-col text-left mb-4 bg-secondary text-secondary-foreground p-4 rounded-lg">
-        <p className="text-lg font-bold">라운드 {stats.round} / 10</p>
-        <div className="flex items-center justify-between gap-2">
-          <div>남은 목숨: {stats.lives}</div>
-          <div>점수: {stats.score}</div>
+    <div className="flex h-full min-h-screen w-full flex-col items-center gap-6 p-2">
+      <div className="mb-4 flex w-full flex-none flex-col rounded-lg bg-secondary p-4 text-left text-secondary-foreground">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">라운드</span>
+            <span className="text-lg">{stats.round} / 10</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">점수:</span>
+            <AnimatedCounter
+              value={stats.score}
+              className="text-lg"
+              formatFn={(val) => val.toLocaleString()}
+              duration={0.8}
+            />
+          </div>
         </div>
       </div>
 
-      {product.img && (
-        <div className="relative aspect-square w-[200px] h-[200px] mb-4">
-          <Image
-            src={getAbsoluteImageUrl(product.img)}
-            alt={product.name}
-            fill
-            className="object-contain rounded-lg w-full h-full"
-            sizes="200px"
-          />
-        </div>
-      )}
-
-      <div className="h-[3rem] flex items-center">
-        <h2
-          className="text-xl font-bold text-center line-clamp-2"
-          title={product.name}
-        >
-          {product.name}
-        </h2>
-      </div>
-
-      <div className="h-20 w-full flex items-center justify-center">
-        {answerState.isChecking && (
-          <div className="text-lg text-center">
-            <p
-              className={`font-bold mb-1 ${
-                answerState.isCorrect ? "text-primary" : "text-red-500"
-              }`}
-            >
-              {answerState.isCorrect ? "정답입니다" : "틀렸습니다"}
-            </p>
-            <p className="text-gray-700">
-              정답: {formatPrice(answerState.actualPrice!)}
-            </p>
-            <p className="text-sm text-gray-500">
-              내 답변: {formatPrice(answerState.userGuess!)}
-            </p>
+      <div className="flex w-full flex-1 flex-col items-center justify-center">
+        {product.img && (
+          <div className="relative mb-4 aspect-square h-[200px] w-[200px]">
+            <Image
+              src={getAbsoluteImageUrl(product.img)}
+              alt={product.name}
+              fill
+              className="h-full w-full rounded-lg object-contain"
+              sizes="200px"
+            />
           </div>
         )}
+
+        <div className="flex h-[3rem] items-center">
+          <h2
+            className="line-clamp-2 text-center text-xl font-bold"
+            title={product.name}
+          >
+            {product.name}
+          </h2>
+        </div>
       </div>
 
-      <div className="w-full mt-auto">
-        <PriceOptions onSubmit={handleSubmit} />
-      </div>
+      <div className="mt-auto w-full flex-none">
+        {stats.isChecking && (
+          <div className="fixed bottom-32 left-1/2 z-50 w-[90%] max-w-md -translate-x-1/2 transform">
+            <div className="animate-slide-up flex w-full items-center justify-between rounded-full bg-slate-700/50 p-4 text-center transition-all duration-200 ease-in-out">
+              <div className="flex flex-1 flex-col items-center justify-center text-sm text-white lg:text-base">
+                <div className="flex items-center justify-center gap-2">
+                  <span>가격 : {Number(product.price).toLocaleString()}원</span>
+                  <span>
+                    예측 : {stats.userGuess.toLocaleString()}원 (
+                    {difference.toLocaleString()}원)
+                  </span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <span>정확도 : {(accuracy * 100).toFixed(0)}%</span>
+                  <span>획득 점수 : {earnedScore.toLocaleString()}점</span>
+                </div>
+              </div>
 
-      <BottomProgress isChecking={answerState.isChecking} />
+              <Button
+                onClick={handleNextRound}
+                className="flex-none animate-pulse rounded-full bg-slate-800/50 text-lg hover:bg-slate-800/70"
+                tabIndex={1}
+                aria-label="다음 라운드"
+              >
+                <ArrowBigRight className="h-6 w-6" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <PriceOptions onSubmit={handleSubmit} stats={stats} />
+      </div>
     </div>
   );
 }

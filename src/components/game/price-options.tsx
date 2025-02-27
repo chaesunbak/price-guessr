@@ -2,12 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { convertToKoreanUnit } from "@/lib/formats";
-
+import type { GameState } from "@/types/game";
 interface PriceOptionsProps {
   onSubmit: (price: number) => void;
+  stats: GameState;
 }
 
-export function PriceOptions({ onSubmit }: PriceOptionsProps) {
+export function PriceOptions({ onSubmit, stats }: PriceOptionsProps) {
   const [inputPrice, setInputPrice] = useState("");
   const [koreanUnit, setKoreanUnit] = useState("");
 
@@ -35,7 +36,7 @@ export function PriceOptions({ onSubmit }: PriceOptionsProps) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2 w-full">
+      <form onSubmit={handleSubmit} className="flex w-full flex-col gap-2">
         <div className="flex items-center gap-2">
           <div className="relative w-full">
             <Input
@@ -43,8 +44,10 @@ export function PriceOptions({ onSubmit }: PriceOptionsProps) {
               value={inputPrice}
               onChange={handleInputChange}
               placeholder="예상 가격을 입력해주세요"
-              className="text-right pr-12"
+              className="pr-12 text-right"
               autoFocus
+              disabled={stats.isChecking}
+              tabIndex={1}
             />
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
               {koreanUnit ? `(${koreanUnit}원)` : ""}
@@ -54,7 +57,13 @@ export function PriceOptions({ onSubmit }: PriceOptionsProps) {
             </span>
           </div>
         </div>
-        <Button type="submit" variant="default" className="w-full">
+        <Button
+          type="submit"
+          variant="default"
+          className="w-full"
+          disabled={stats.isChecking || inputPrice === ""}
+          tabIndex={2}
+        >
           확인
         </Button>
       </form>

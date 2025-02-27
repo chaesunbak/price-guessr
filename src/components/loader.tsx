@@ -49,27 +49,27 @@ export function Loader() {
     <div className="flex flex-col items-center justify-center gap-6">
       <div
         className={clsx(
-          "transition-opacity duration-500 flex flex-col items-center justify-center",
-          isTransitioning ? "opacity-0" : "opacity-100"
+          "duration-2000 flex flex-col items-center justify-center transition-opacity",
+          isTransitioning ? "opacity-0" : "opacity-100",
         )}
       >
-        <div className="relative w-32 h-32">
+        <div className="relative h-32 w-32">
           <Image
             src={currentItem.image}
             alt={currentItem.message}
             fill
-            className="object-contain rounded-lg"
+            className="rounded-lg object-contain"
           />
         </div>
-        <p className="text-lg font-medium text-center mt-4">
+        <p className="mt-4 text-center text-lg font-medium">
           {currentItem.message}
         </p>
       </div>
-      <div className="flex gap-2 mt-4">
+      <div className="mt-4 flex gap-2">
         {LOADING_ITEMS.map((_, index) => (
           <div
             key={index}
-            className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+            className={`h-2 w-2 rounded-full transition-colors duration-300 ${
               index === currentIndex ? "bg-blue-500" : "bg-gray-300"
             }`}
           />
